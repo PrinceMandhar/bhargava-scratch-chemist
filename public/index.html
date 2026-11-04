@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="hi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Admin - Bhargava Scratch Cards</title>
+<script>(function(){var t=new URLSearchParams(location.search).get("t");if(t)location.replace("/gift?t="+encodeURIComponent(t))})()</script>
+<link rel="stylesheet" href="style.css">
+</head><body>
+<img class="logo" src="logo.png" alt="Bhargava Phytolab">
+<h1>Admin Panel</h1>
+<p class="sub">Live data: kis chemist ko kya assign hua aur scratch kab hua <span id="upd" class="note"></span></p>
+
+<div class="panel"><h3>1. Naya ticket / link banao</h3>
+ <label>Chemist ka naam</label><input id="dn" placeholder="e.g. Sharma Medical Store" style="width:100%" maxlength="80">
+ <label>Kitne cards dene hain?</label><input id="nn" type="number" min="1" value="1" style="width:100px">
+ <div><button id="gb">Generate link</button></div><div id="out"></div></div>
+
+<div class="panel"><h3>2. Summary</h3><div id="stats" class="stats"></div><div class="tw" id="stock"></div></div>
+<div class="panel"><h3>3. Tickets (chemist-wise)</h3><div class="tw" id="links"></div></div>
+<div class="panel"><h3>4. Saare cards: assign aur scratch status</h3><div class="tw" id="cards"></div></div>
+<div class="panel"><h3>5. Scratch activity (latest pehle)</h3><div class="tw" id="events"></div></div>
+<div class="panel"><h3>6. CSV download</h3>
+ <button id="c1">CSV: saare cards</button> <button id="c2" class="alt">CSV: scratch activity</button>
+ <p class="note">Sab data server par save hota hai, kisi bhi device se admin page kholo to wahi data dikhega. Time India (IST) me hai.</p></div>
+
+<script>
+var D=null;
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function fmt(s){return s?new Date(s).toLocaleString("en-IN",{timeZone:"Asia/Kolkata",day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit"}):"-"}
+function esc(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"'}
+function dl(n,rows){var a=document.createElement("a");a.download=n;a.href=URL.createObjectURL(new Blob(["\ufeff"+rows.join("\r\n")],{type:"text/csv"}));document.body.appendChild(a);a.click();a.remove()}
+function badge(s){return el("span","badge "+s,s)}
+function table(head,rows){var t=document.createElement("table"),h=t.insertRow();head.forEach(function(x){var th=document.createElement("th");th.textContent=x;h.appendChild(th)});
+  rows.forEach(function(r){var tr=t.insertRow();r.forEach(function(v){var c=tr.insertCell();if(v instanceof Node)c.appendChild(v);else c.textContent=v})});return t}
+function url(tok){return location.origin+"/gift?t="+tok}
+function btns(L){
+  var w=el("span"),u=url(L.token);
+  var o=el("a","btn sm","Open");o.href=u;o.target="_blank";w.appendChild(o);
+  var c=el("button","sm","Copy");c.onclick=function(){if(navigator.clipboard)navigator.clipboard.writeText(u);c.textContent="Copied"};w.appendChild(c);
+  var wa=el("a","btn sm alt","WhatsApp");wa.target="_blank";wa.href="https://wa.me/?text="+encodeURIComponent("Aapke liye scratch gift: "+u);w.appendChild(wa);
+  if(!L.revoked){var r=el("button","sm red","Cancel");r.onclick=function(){if(confirm("Ye link cancel karein? Scratch na hue cards free ho jayenge.")){api("/api/admin/revoke",{token:L.token}).then(load)}};w.appendChild(r)}
+  return w}
+function api(p,body){return fetch(p,body?{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}:{}).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.error||"Error");return d})})}
+function render(){
+  var cs=D.cards,sc=cs.filter(function(c){return c.status=="Scratched"}).length,as=cs.filter(function(c){return c.status=="Assigned"}).length;
+  var s=document.getElementById("stats");s.textContent="";
+  [["Total",D.total],["Available",D.total-as-sc],["Assigned",as],["Scratched",sc],["Tickets",D.links.length]].forEach(function(x){var d=el("div","stat");d.appendChild(el("b",null,x[1]));d.appendChild(el("span",null,x[0]));s.appendChild(d)});
+  var st=document.getElementById("stock");st.textContent="";
+  st.appendChild(table(["Code","Gift","Total","Assigned","Scratched","Available"],D.gifts.map(function(g){
+    var m=cs.filter(function(c){return c.code==g.code});var a=m.filter(function(c){return c.status=="Assigned"}).length,k=m.filter(function(c){return c.status=="Scratched"}).length;return[g.code,g.name,g.total,a,k,g.total-a-k]})));
+  var L=document.getElementById("links");L.textContent="";
+  if(!D.links.length)L.appendChild(el("p",null,"Abhi koi ticket nahi bana."));
+  else L.appendChild(table(["Ticket","Chemist","Cards","Assigned gifts (code)","Scratched","Issued at","Status","Link"],D.links.slice().reverse().map(function(l){
+    return[l.ticket,l.doctor,l.cards.join(", "),l.cards.map(function(n){var c=cs[n-1];return n+": "+c.name+" ("+c.code+")"}).join("; "),l.scratched+" / "+l.cards.length,fmt(l.createdAt),badge(l.revoked?"Cancelled":l.scratched==l.cards.length?"Scratched":"Assigned"),btns(l)]})));
+  var C=document.getElementById("cards");C.textContent="";
+  C.appendChild(table(["Card","Gift","Code","Status","Chemist","Ticket","Issued at","Scratched at"],cs.map(function(c){return[c.n,c.name,c.code,badge(c.status),c.doctor||"-",c.ticket||"-",fmt(c.issuedAt),fmt(c.scratchedAt)]})));
+  var E=document.getElementById("events");E.textContent="";
+  if(!D.events.length)E.appendChild(el("p",null,"Abhi tak kisi ne scratch nahi kiya."));
+  else E.appendChild(table(["Scratched at","Chemist","Ticket","Card","Gift","Code"],D.events.map(function(e){return[fmt(e.at),e.doctor,e.ticket,e.card,e.gift,e.code]})));
+  document.getElementById("nn").max=D.total-as-sc;
+  document.getElementById("upd").textContent="(updated "+new Date().toLocaleTimeString("en-IN")+")";
+}
+function load(){return api("/api/admin/overview").then(function(d){D=d;render()}).catch(function(e){document.getElementById("upd").textContent="Load error: "+e.message})}
+document.getElementById("gb").onclick=function(){
+  var out=document.getElementById("out");out.textContent="";
+  api("/api/admin/issue",{doctor:document.getElementById("dn").value,count:document.getElementById("nn").value}).then(function(r){
+    var u=url(r.token),d=document.getElementById("dn").value.trim();
+    var l=el("div",null,u);l.id="link";out.appendChild(l);
+    out.appendChild(el("p","note","Ticket "+r.ticket+" | Cards: "+r.cards.join(", ")));
+    document.getElementById("dn").value="";return load().then(function(){var L=D.links.filter(function(x){return x.token==r.token})[0];if(L)out.appendChild(btns(L))});
+  }).catch(function(e){out.appendChild(el("p","err",e.message))});
+};
+document.getElementById("c1").onclick=function(){
+  dl("all-cards.csv",["Card No,Gift,Code,Status,Chemist,Ticket,Issued At (IST),Scratched At (IST)"].concat(D.cards.map(function(c){return[c.n,esc(c.name),c.code,c.status,esc(c.doctor),c.ticket,esc(c.issuedAt?fmt(c.issuedAt):""),esc(c.scratchedAt?fmt(c.scratchedAt):"")].join(",")})))};
+document.getElementById("c2").onclick=function(){
+  dl("scratch-activity.csv",["Scratched At (IST),Chemist,Ticket,Card No,Gift,Code"].concat(D.events.map(function(e){return[esc(fmt(e.at)),esc(e.doctor),e.ticket,e.card,esc(e.gift),e.code].join(",")})))};
+load();setInterval(load,15000);
+</script></body></html>

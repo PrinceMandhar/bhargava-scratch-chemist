@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="hi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Bhargava Phytolab - Scratch & Win</title>
+<link rel="stylesheet" href="style.css">
+</head><body>
+<img class="logo" src="logo.png" alt="Bhargava Phytolab">
+<div id="app"></div>
+<script>
+var app=document.getElementById("app"),T=new URLSearchParams(location.search).get("t");
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function msg(t){app.textContent="";app.appendChild(el("h1",null,"Bhargava Phytolab"));app.appendChild(el("div","msg",t))}
+if(!T)msg("Ye link sahi nahi hai. Apna scratch card link dobara kholein ya company se sampark karein.");
+else fetch("/api/link/"+encodeURIComponent(T)).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d}})})
+ .then(function(x){x.ok?render(x.d):msg(x.d.error||"Link sahi nahi hai.")}).catch(function(){msg("Network error. Dobara try karo.")});
+
+function render(d){
+  app.textContent="";
+  app.appendChild(el("h1",null,"Scratch & Win"));
+  app.appendChild(el("p","sub","Apne card ko ungli ya mouse se ragdo"));
+  app.appendChild(el("div","tk","Ticket: "+d.ticket));
+  var g=el("div");g.id="grid";app.appendChild(g);
+  d.cards.forEach(function(c){g.appendChild(make(c,d))});
+}
+function face(card,gift,n){card.textContent="";card.appendChild(el("small",null,"Congratulations! \uD83C\uDF89"));card.appendChild(el("b",null,gift));card.appendChild(el("small",null,"Card #"+n))}
+function make(c,d){
+  var box=el("div","box"),card=el("div","card");
+  box.appendChild(el("div","no","Card #"+c.n));box.appendChild(card);
+  var gift=c.gift||null,btn=el("button",null,"Image save karo");btn.hidden=true;
+  btn.onclick=function(){save(c.n,gift)};box.appendChild(btn);
+  if(c.scratched){face(card,gift,c.n);btn.hidden=false;return box}
+  card.appendChild(el("b",null,"\uD83C\uDF81 Scratch karo"));
+  var cv=document.createElement("canvas");cv.width=500;cv.height=300;card.appendChild(cv);
+  var x=cv.getContext("2d"),gr=x.createLinearGradient(0,0,500,300);gr.addColorStop(0,"#8f9a8a");gr.addColorStop(1,"#c3ccbf");
+  x.fillStyle=gr;x.fillRect(0,0,500,300);x.fillStyle="#4d5a48";x.font="bold 34px sans-serif";x.textAlign="center";x.fillText("SCRATCH HERE",250,160);
+  var down=false,started=false;
+  function dot(e){var b=cv.getBoundingClientRect();x.globalCompositeOperation="destination-out";x.beginPath();x.arc((e.clientX-b.left)*500/b.width,(e.clientY-b.top)*300/b.height,22,0,7);x.fill()}
+  function start(){
+    if(started)return;started=true;
+    fetch("/api/scratch/"+encodeURIComponent(T)+"/"+c.n,{method:"POST"}).then(function(r){return r.json()}).then(function(r){
+      if(!r.gift)throw 0;gift=r.gift;face(card,gift,c.n);card.appendChild(cv);
+    }).catch(function(){started=false;alert("Network error. Dobara scratch karo.")});
+  }
+  cv.onpointerdown=function(e){down=true;try{cv.setPointerCapture(e.pointerId)}catch(_){}start();dot(e)};
+  cv.onpointermove=function(e){if(down)dot(e)};
+  cv.onpointerup=cv.onpointercancel=function(){
+    down=false;if(!gift)return;
+    var a=x.getImageData(0,0,500,300).data,t=0,s=0;for(var i=3;i<a.length;i+=40){s++;if(a[i]==0)t++}
+    if(t/s>0.4){cv.remove();btn.hidden=false}
+  };
+  return box;
+}
+function save(n,gift){
+  var c=document.createElement("canvas");c.width=800;c.height=480;var x=c.getContext("2d");
+  var gr=x.createLinearGradient(0,0,800,480);gr.addColorStop(0,"#dff2d0");gr.addColorStop(1,"#9fd47f");
+  x.fillStyle=gr;x.fillRect(0,0,800,480);x.fillStyle="#1d4a0e";x.textAlign="center";
+  x.font="bold 26px sans-serif";x.fillText("Bhargava Phytolab",400,60);
+  x.font="30px sans-serif";x.fillText("Congratulations!",400,130);
+  x.font="bold 46px sans-serif";x.fillText(gift,400,240,740);
+  x.font="28px sans-serif";x.fillText("Card #"+n,400,310);
+  var a=document.createElement("a");a.download="gift-card-"+n+".png";a.href=c.toDataURL("image/png");document.body.appendChild(a);a.click();a.remove();
+}
+</script></body></html>
